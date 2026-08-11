@@ -1,279 +1,134 @@
-# A11 Agentic SOC Automation
+# Agentic-SOC-AI-Local
 
-## 2026 update: Dataset + ML Detection Agent
+`Agentic-SOC-AI-Local` là nền tảng SOC automation **local-first, real-time** để nhận telemetry bảo mật, phân tích/triage, tạo incident & report, và đề xuất response có cơ chế phê duyệt trước khi thực thi.
 
-The project now includes a local **ML Detection Agent** trained from sanitized
-seed events and designed to be retrained with **DataSense: CIC IIoT dataset
-2025**. This dataset is the recommended latest benchmark for the A11 lab because
-it covers HTTP Flood/DoS/DDoS, Recon/Nmap, Web SQL Injection/XSS, brute force,
-MITM/spoofing and Mirai-like malware scenarios.
+## 1) Vì sao dự án này ra đời? Dự án giải quyết vấn đề gì?
 
-Runtime flow:
+Trong môi trường lab, SME hoặc team SOC nhỏ, các khó khăn thường gặp là:
 
-```text
-OPNsense / Apache / Suricata / Windows log
-  -> normalize
-  -> enrichment
-  -> ML Detection Agent
-  -> deterministic triage + RAG playbook
-  -> alert / incident / report / response action
-  -> analyst approval
-  -> n8n attack analysis + Mailpit email or OPNsense adapter
-```
+- Log phân tán từ nhiều nguồn (Apache, Suricata, Windows, syslog, Splunk HEC).
+- Quy trình triage và điều tra tốn thời gian, phụ thuộc thao tác thủ công.
+- Khó chuẩn hóa playbook xử lý sự cố và lưu bằng chứng/audit xuyên suốt.
+- Lo ngại gửi dữ liệu nhạy cảm ra dịch vụ cloud khi thử nghiệm AI automation.
 
-n8n acts as the SOAR automation layer. It receives high/critical alert and
-approved response webhooks, classifies the attack again from the SOC payload,
-sends a local email notification to Mailpit, and writes an automation audit
-record back to A11 SOC.
+`Agentic-SOC-AI-Local` được tạo ra để giải quyết các điểm nghẽn trên theo hướng chạy cục bộ: ingest đa nguồn, chuẩn hóa + tương quan, enrichment, tra cứu knowledge/playbook (RAG), sinh incident/report, và response có approval gate.
 
-Train the bundled demo model:
+## 2) Mục đích chính của phần mềm
 
-```bash
-python3 scripts/train_attack_classifier.py \
-  --input datasets/a11_seed_labeled_events.jsonl \
-  --output models/attack_classifier.json
-```
+Mục tiêu chính của `Agentic-SOC-AI-Local` là cung cấp một pipeline SOC end-to-end phục vụ vận hành/thử nghiệm:
 
-Train with an official DataSense/CIC CSV after downloading it:
+- Thu thập sự kiện qua REST ingest, Splunk-compatible HEC và syslog UDP.
+- Chuẩn hóa dữ liệu và gom nhóm sự kiện liên quan thành alert.
+- Triage theo mức độ `Low/Medium/High/Critical`, enrich IOC/asset/IP context.
+- Tra cứu playbook nội bộ trong `knowledge/` (có thể bổ sung Ollama local).
+- Tạo incident + report Markdown cho alert nghiêm trọng.
+- Sinh response proposal (notify/block/isolate) nhưng chỉ thực thi khi analyst duyệt.
+- Ghi audit đầy đủ và phát sự kiện thời gian thực qua SSE dashboard.
 
-```bash
-python3 scripts/train_attack_classifier.py \
-  --input datasets/a11_seed_labeled_events.jsonl \
-  --csv /path/to/DataSense_or_CIC_dataset.csv \
-  --sample-per-class 5000 \
-  --output models/attack_classifier.json
-```
+> API entrypoint: `app.main:app` (FastAPI/Uvicorn).
 
-Hệ thống SOC real-time chạy cục bộ, được hiện thực hóa từ hai tài liệu TTTN:
-OPNsense/Apache/Splunk làm nguồn telemetry và Agentic AI làm lớp tự động hóa
-triage, enrichment, RAG, incident, report và response có phê duyệt.
+## 3) Cấu trúc repository
 
-## Thành phần đã có
+Các thư mục/top-level chính trong `Agentic-SOC-AI-Local`:
 
-- Nhận log qua REST, Splunk-compatible HEC và syslog UDP 5514. Khi chạy bằng
-  Docker, host UDP 514 cũng được forward vào collector để tương thích OPNsense
-  / pfSense cũ.
-- Chuẩn hóa Apache access log, Suricata EVE JSON, Windows Security Event và
-  sự kiện JSON tổng quát.
-- Gom nhóm/correlation theo fingerprint trong cửa sổ 5 phút.
-- Giữ từng raw event/normalized event làm bằng chứng, dù nhiều event đã được gom
-  vào cùng một alert.
-- Alert Triage Agent đánh mức `Low / Medium / High / Critical`, độ tin cậy,
-  MITRE ATT&CK và khuyến nghị.
-- Enrichment Agent tra asset inventory, IOC cục bộ và thuộc tính IP.
-- RAG Agent tra playbook trong thư mục `knowledge/`, không gửi dữ liệu ra cloud.
-- Ollama tùy chọn cho phân tích bổ sung; hệ thống vẫn hoạt động khi LLM tắt/lỗi.
-- Tự động tạo incident và báo cáo Markdown cho alert High/Critical.
-- Response Agent tạo đề xuất notify, block IP hoặc isolate host.
-- Approval gate: block/cô lập không bao giờ tự chạy khi chưa có quyết định của
-  analyst; mọi bước được ghi audit log.
-- Dashboard SSE real-time, không phụ thuộc CDN nên hoạt động offline.
-- OPNsense adapter, generic webhook adapter, Splunk search poller và n8n profile.
+- `app/`: mã nguồn backend FastAPI và SOC pipeline (`main.py`, `pipeline.py`, `parsers.py`, `agents/`, `integrations/`, `static/`).
+- `data/`: dữ liệu vận hành cục bộ (ví dụ `assets.json`, `iocs.json`).
+- `knowledge/`: playbook/knowledge base cho RAG nội bộ.
+- `models/`: model đã train (ví dụ `attack_classifier.json`).
+- `datasets/`: seed dataset và dữ liệu phục vụ huấn luyện.
+- `n8n/`: workflow automation cục bộ (ví dụ webhook/notification flow).
+- `scripts/`: script hỗ trợ chạy local, train model, gửi demo events, test webhook.
+- `tests/`: test cho API, parser, RAG, ML detector, syslog queue, workflow.
+- `docs/`: tài liệu vận hành/triển khai (ví dụ Ubuntu local run).
+- `report_assets/`: tài sản/scripts phục vụ report/thesis artefacts.
+- `work/`: thư mục làm việc/phát sinh trong quá trình xử lý.
 
-## Kiến trúc
+Các file cấu hình quan trọng:
+
+- `docker-compose.yml`: stack local (api, postgres, optional n8n/mailpit/ollama/splunk-poller).
+- `Dockerfile`: image cho API service.
+- `requirements.txt`, `requirements-dev.txt`, `pyproject.toml`: dependency và cấu hình test.
+
+## 4) Luồng dữ liệu chính (ingestion → alerting/incident/report/response)
 
 ```text
-Apache / Suricata / Windows / Splunk / Syslog
-                       │
-          REST + HEC + UDP collector
-                       │
-        Normalize → Correlate → Triage
-                       │
-         IOC/Asset → RAG → Local Ollama
-                       │
-             Alert → Incident → Report
-                       │
-       Response proposal → Approval gate
-                       │
-       dry-run / webhook / OPNsense alias
-                       │
-          Audit log + SSE live dashboard
+Nguồn log/sự kiện
+(Apache/Suricata/Windows/Syslog/Splunk HEC)
+            │
+            ▼
+Ingest layer
+(REST /api/v1/ingest, /services/collector/*, syslog UDP)
+            │
+            ▼
+Normalize + Correlate
+(parser theo nguồn, gom event theo fingerprint/correlation window)
+            │
+            ▼
+Triage + Enrichment
+(severity/confidence/MITRE, IOC-asset-IP context)
+            │
+            ▼
+RAG Playbook Lookup (+ Ollama local tùy chọn)
+            │
+            ▼
+Alert / Incident / Markdown Report
+            │
+            ▼
+Response Proposal (notify/block/isolate)
+            │
+            ▼
+Approval Gate của analyst
+            │
+            ├─ Reject  → ghi audit
+            └─ Approve → thực thi theo RESPONSE_MODE (dry_run/webhook/opnsense)
+                          + ghi audit + phát SSE realtime
 ```
 
-## Chạy nhanh bằng Docker
+## 5) Quick start (onboarding nhanh)
 
-1. Tạo cấu hình:
+### Cách 1: Chạy bằng Docker Compose
 
-   ```powershell
-   Copy-Item .env.example .env
-   ```
+1. Khởi động stack mặc định:
 
-2. Đổi tối thiểu `SOC_API_KEY`, `SOC_ADMIN_TOKEN` và `POSTGRES_PASSWORD` trong
-   `.env`.
+```bash
+docker compose up -d --build
+```
 
-3. Khởi động:
+2. Nếu cần đổi secret mặc định, thiết lập biến môi trường trước khi chạy (ít nhất `SOC_API_KEY`, `SOC_ADMIN_TOKEN`, `POSTGRES_PASSWORD`).
 
-   ```powershell
-   docker compose up -d --build
-   ```
+3. Truy cập dashboard: `http://127.0.0.1:8000`
 
-4. Mở `http://127.0.0.1:8000`, nhập `SOC_ADMIN_TOKEN`.
+4. Kiểm tra health:
 
-5. Nhấn **Run lab scenario** để sinh Apache, Suricata và Windows events an toàn.
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-Mặc định `RESPONSE_MODE=dry_run`: khi analyst bấm Approve, hệ thống kiểm tra và
-ghi audit nhưng không thay đổi firewall/endpoint thật.
+Mặc định hệ thống dùng `RESPONSE_MODE=dry_run` để an toàn khi lab.
 
-## Chạy trực tiếp để phát triển
-
-Python 3.11+:
+### Cách 2: Chạy local để phát triển
 
 ```powershell
 python -m pip install -r requirements-dev.txt
-Copy-Item .env.example .env
 .\scripts\start_local.ps1
 ```
 
-Với cấu hình mặc định trong script, token dashboard là
-`change-me-admin-token`, API ingest key là `change-me-ingest-key`. Chỉ dùng hai
-giá trị này trong máy lab.
+Script `start_local.ps1` sẽ chạy `uvicorn app.main:app --reload` và dùng token dev mặc định nếu bạn chưa set biến môi trường.
 
-## Gửi log vào hệ thống
+## 6) API vận hành chính
 
-### API chung
+- `POST /api/v1/ingest`: ingest một hoặc nhiều event (header `X-API-Key`).
+- `POST /services/collector/event`, `POST /services/collector/raw`: endpoint tương thích Splunk HEC.
+- `GET /api/v1/alerts`, `GET /api/v1/incidents`, `GET /api/v1/actions`, `GET /api/v1/audit`: màn hình vận hành SOC.
+- `POST /api/v1/actions/{action_id}/decision`: approve/reject response action.
+- `POST /api/v1/stream-ticket` + `GET /api/v1/stream`: realtime updates qua SSE.
 
-```powershell
-$headers = @{ "X-API-Key" = "your-ingest-key" }
-$body = @{
-  source = "apache"
-  event = '203.0.113.66 - - [28/Jul/2026:15:31:11 +0000] "GET /.env HTTP/1.1" 404 512 "-" "dirb/2.22"'
-} | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:8000/api/v1/ingest -Method Post -Headers $headers -ContentType application/json -Body $body
-```
+OpenAPI: `http://127.0.0.1:8000/docs`
 
-### HEC tương thích Splunk
+## 7) Tích hợp tùy chọn và phạm vi
 
-```bash
-curl http://127.0.0.1:8000/services/collector/event \
-  -H "Authorization: Splunk your-ingest-key" \
-  -H "Content-Type: application/json" \
-  -d '{"sourcetype":"suricata:eve","event":{"event_type":"alert","src_ip":"203.0.113.66","dest_ip":"192.168.1.100","dest_port":80,"alert":{"severity":2,"signature":"ET SCAN Nmap","category":"Attempted Information Leak"}}}'
-```
+- **n8n + Mailpit** (profile `automation`): orchestration/notification local.
+- **Ollama** (profile `ai`): phân tích bổ sung local LLM, không thay thế approval/safety logic.
+- **splunk-poller** (profile `splunk`): poll sự kiện từ Splunk API.
 
-HEC nhận được cả nhiều JSON object nối tiếp nhau như Splunk HEC.
-
-### Syslog từ OPNsense
-
-Trong OPNsense, cấu hình remote logging đến IP Ubuntu chạy SOC. Với bản mới có
-thể đặt UDP port `5514`; với OPNsense 19.1 hoặc giao diện không có ô port, để
-mặc định UDP `514`. Docker Compose đã publish cả host `514/udp` và `5514/udp`
-vào collector nội bộ. Nếu dùng Docker/VMware, bảo đảm VMnet và firewall Ubuntu
-cho phép đúng IP nguồn, không mở các port này ra Internet.
-
-Kiểm tra nhanh trên Ubuntu:
-
-```bash
-sudo tcpdump -ni any 'udp port 514 or udp port 5514'
-docker compose logs -f api
-```
-
-Khi A11 SOC nhận được syslog, log API sẽ có dòng dạng
-`Received syslog datagram from ...`.
-
-### Splunk Cloud
-
-Có hai mô hình:
-
-1. **Khuyến nghị cho lab:** Universal Forwarder vẫn gửi Apache lên Splunk Cloud,
-   đồng thời một shipper/agent cục bộ gửi cùng log vào HEC của A11 SOC. Không cần
-   mở A11 SOC ra Internet.
-2. **Poll Splunk REST:** điền `SPLUNK_URL`, `SPLUNK_TOKEN`, `SPLUNK_SEARCH`, rồi:
-
-   ```powershell
-   docker compose --profile splunk up -d splunk-poller
-   ```
-
-   Splunk Cloud có thể yêu cầu Support bật REST API, và free trial có thể không
-   có quyền này. Poller dùng endpoint v2
-   `/services/search/v2/jobs/export`, tránh endpoint v1 đã deprecated.
-
-## Bật Local LLM
-
-```powershell
-docker compose --profile ai up -d ollama
-docker compose exec ollama ollama pull qwen2.5:7b
-```
-
-Sau đó đặt `OLLAMA_ENABLED=true` và khởi động lại `api`. Ollama chỉ được dùng để
-tạo đánh giá bổ sung; severity nền, approval gate và safety validation vẫn do
-logic xác định để tránh LLM tự ý thực thi.
-
-## Kết nối OPNsense an toàn
-
-1. Trên OPNsense tạo alias loại **Host**, **Network** hoặc **External** tên
-   `SOC_BLOCKLIST`.
-2. Tạo firewall rule dùng alias này ở đúng interface và kiểm thử thủ công.
-3. Tạo API key có quyền tối thiểu cần thiết.
-4. Điền `OPNSENSE_URL`, `OPNSENSE_KEY`, `OPNSENSE_SECRET`.
-5. Giữ `RESPONSE_MODE=dry_run` để kiểm thử approval/audit trước.
-6. Khi đã xác nhận rule, đặt `RESPONSE_MODE=opnsense`.
-
-Adapter sử dụng API chính thức
-`POST /api/firewall/alias_util/add/{alias}` với body `{"address":"IP"}`. Hệ
-thống từ chối block IP private, loopback, multicast, unspecified hoặc IP sai cú
-pháp.
-
-## Profiles bổ sung
-
-- `docker compose --profile automation up -d n8n`: workflow automation local
-  tại `127.0.0.1:5678`.
-- `docker compose --profile ai up -d`: Ollama local.
-- `docker compose --profile splunk up -d`: Splunk REST poller.
-
-Các profile không cần thiết cho pipeline lõi. Webhook của n8n có thể được đặt
-vào `NOTIFICATION_WEBHOOK_URL` hoặc `RESPONSE_WEBHOOK_URL`.
-
-## API vận hành
-
-| Endpoint | Mục đích | Xác thực |
-|---|---|---|
-| `POST /api/v1/ingest` | Nhận một/nhiều event | `X-API-Key` |
-| `POST /services/collector/event` | Splunk HEC JSON | `Authorization: Splunk` |
-| `POST /services/collector/raw` | HEC raw | `Authorization: Splunk` |
-| `GET /api/v1/alerts` | Hàng đợi alert | Bearer admin |
-| `GET /api/v1/alerts/{id}/events` | Bằng chứng gốc của alert | Bearer admin |
-| `GET /api/v1/incidents` | Incident và report | Bearer admin |
-| `GET /api/v1/actions` | Approval queue | Bearer admin |
-| `POST /api/v1/actions/{id}/decision` | Approve/reject | Bearer admin |
-| `GET /api/v1/audit` | Audit trail | Bearer admin |
-| `POST /api/v1/stream-ticket` | Cấp vé SSE ngắn hạn | Bearer admin |
-| `GET /api/v1/stream` | SSE real-time | Vé stream riêng, không lộ admin token |
-
-OpenAPI: `http://127.0.0.1:8000/docs`.
-
-## Kiểm thử
-
-```powershell
-pytest
-```
-
-Test bao phủ parser, triage, RAG và luồng end-to-end:
-ingest → alert → incident → pending block → analyst approval → dry-run → audit.
-
-## Hardening trước production
-
-- Đổi toàn bộ secret mặc định và dùng secret manager/Docker secrets.
-- Đặt dashboard sau Tailscale hoặc reverse proxy có TLS/SSO; không NAT trực tiếp
-  port 8000 ra Internet.
-- Chỉ bind HTTP vào `127.0.0.1` nếu không có reverse proxy.
-- Giới hạn IP gửi syslog/HEC ở firewall máy Ubuntu.
-- Dùng certificate hợp lệ cho OPNsense và giữ `OPNSENSE_VERIFY_TLS=true`.
-- Backup PostgreSQL và bảo vệ audit log khỏi sửa/xóa bởi tài khoản ứng dụng.
-- Thay asset/IOC mẫu trong `data/` bằng dữ liệu của lab thật.
-- Kiểm thử OPNsense adapter trên alias/rule lab trước khi bật production.
-
-## Tài liệu kỹ thuật tham chiếu
-
-- [OPNsense Firewall API](https://docs.opnsense.org/development/api/core/firewall.html)
-- [OPNsense alias API example](https://docs.opnsense.org/manual/aliases.html)
-- [Ollama structured output](https://docs.ollama.com/capabilities/structured-outputs)
-- [Splunk HEC examples](https://docs.splunk.com/Documentation/Splunk/9.4.2/Data/HECExamples)
-- [Splunk v2 search export endpoint](https://help.splunk.com/en/splunk-cloud-platform/leverage-rest-apis/rest-api-reference/10.0.2503/search-endpoints/search-endpoint-descriptions)
-
-## Giới hạn có chủ đích
-
-Đây là hệ thống SOC hoàn chỉnh ở mức lab/đồ án và pilot nội bộ, không phải sản
-phẩm EDR/SIEM thương mại. Endpoint isolation thực tế cần adapter của EDR đang
-dùng; hiện action này được tạo, phê duyệt và audit nhưng chỉ chạy qua dry-run
-hoặc generic webhook. GeoIP/threat-intel Internet không được gọi mặc định để giữ
-dữ liệu và vận hành hoàn toàn cục bộ.
+`Agentic-SOC-AI-Local` tập trung cho lab/pilot nội bộ theo hướng local-first SOC automation; không nhằm thay thế đầy đủ SIEM/EDR thương mại trong production quy mô lớn.
