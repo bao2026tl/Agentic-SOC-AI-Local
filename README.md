@@ -55,15 +55,25 @@ Các môi trường SOC truyền thống đang phải đối mặt với một s
 ### Các tính năng chính (Key Features)
 
 ✅ **Ingest từ đa nguồn (Multi-Source Ingest)**: REST API, Splunk HEC, Syslog UDP.
+
 ✅ **Chuẩn hóa Event (Event Normalization)**: Apache, Suricata, Windows, JSON-generic.
+
 ✅ **Tương quan (Correlation)**: Gom nhóm (grouping) dựa trên fingerprint trong khung thời gian 5 phút.
+
 ✅ **Làm giàu dữ liệu (Enrichment)**: Asset inventory (kho tài sản), tra cứu IOC, IP context (private/global/reserved).
+
 ✅ **Phát hiện bằng ML (ML Detection)**: Được train trên các bộ dữ liệu event đã được gán nhãn (A11 seed, DataSense/CIC compatible).
+
 ✅ **Cơ sở tri thức RAG (RAG Knowledge Base)**: Tìm kiếm full-text trên các file playbook định dạng Markdown.
+
 ✅ **Hỗ trợ Local LLM**: Tích hợp tùy chọn với Ollama để phân tích chuyên sâu hơn.
+
 ✅ **Đề xuất phản hồi (Response Proposals)**: Block IP, isolate host (cô lập máy chủ), gửi alert (kèm các cổng phê duyệt).
+
 ✅ **Hub Tự động hóa (Automation Hub)**: Tích hợp n8n webhook dành cho các luồng SOAR workflow bên ngoài.
+
 ✅ **Dashboard Real-time**: Cập nhật live dựa trên công nghệ SSE, không phụ thuộc vào CDN.
+
 ✅ **Audit Log không thể thay đổi (Immutable Audit Log)**: Mọi event, phê duyệt và action đều được lưu lại.
 
 ---
