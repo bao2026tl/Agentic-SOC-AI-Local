@@ -813,23 +813,3 @@ curl -X POST http://127.0.0.1:8000/api/v1/ingest   -H "X-API-Key: <SOC_API_KEY>"
 | **Mailpit không nhận được emails** | Check biến `NOTIFICATION_WEBHOOK_URL`, restart n8n, inspect kĩ lại luồng n8n workflow. |
 | **Sự cố liên quan tới hiệu suất (Performance)** | Tăng tham số `syslog_worker_count`, điều chỉnh tham số `correlation_window_seconds`, scale (mở rộng) Database. |
 | **Không load được ML model** | Chạy train model: `python scripts/train_attack_classifier.py`, check lại model path trong file config. |
-
----
-
-## Đóng góp (Contributing)
-
-Rất hoan nghênh mọi sự đóng góp của bạn! Vui lòng làm theo các bước sau:
-
-1. Fork lại repository này.
-2. Tạo một feature branch (`git checkout -b feature/your-feature`).
-3. Commit các thay đổi (`git commit -m "Add feature"`).
-4. Viết/cập nhật thêm các bài tests (`pytest`).
-5. Submit một pull request.
-
-## Lời cảm ơn (Acknowledgments)
-
-- Được xây dựng dựa trên [FastAPI](https://fastapi.tiangolo.com/), [SQLAlchemy](https://www.sqlalchemy.org/), [n8n](https://n8n.io/).
-- Lấy cảm hứng từ tự động hóa SOC theo chuẩn Enterprise (Splunk, SentinelOne, Trellix).
-- Tính tương thích Dataset: [CIC IIoT 2025](https://www.unb.ca/cic/datasets/iiott_2025.html), [DataSense](https://www.unb.ca/cic/datasets/datasense.html).
-
-
